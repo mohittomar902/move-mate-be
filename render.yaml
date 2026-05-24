@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: movemate-backend
+    runtime: node
+    plan: free
+    rootDir: .
+    buildCommand: npm install && npm run prisma:generate && npm run prisma:deploy && npm run build:backend
+    startCommand: npm run start:backend
+    healthCheckPath: /api/docs
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 15m
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 7d
+      - key: REDIS_URL
+        value: ""
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_SECRET
+        sync: false
+      - key: MAPBOX_TOKEN
+        sync: false
+      - key: FIREBASE_SERVER_KEY
+        sync: false

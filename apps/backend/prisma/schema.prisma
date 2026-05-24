@@ -1,0 +1,214 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum VerificationStatus {
+  PENDING
+  UNDER_REVIEW
+  VERIFIED
+  REJECTED
+}
+
+enum TripStatus {
+  OPEN
+  STARTED
+  COMPLETED
+  CANCELLED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  REJECTED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum DeliveryStatus {
+  PENDING
+  PICKED_UP
+  DELIVERED
+  CANCELLED
+}
+
+enum DocumentType {
+  SELFIE
+  CAR_PHOTO
+  RC_CARD
+  DRIVING_LICENSE
+  AADHAAR
+}
+
+enum DocumentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id                 String             @id @default(uuid())
+  fullName           String?            @map("full_name")
+  phone              String             @unique
+  email              String?            @unique
+  profileImage       String?            @map("profile_image")
+  rating             Decimal            @default(0) @db.Decimal(3, 2)
+  verificationStatus VerificationStatus @default(PENDING) @map("verification_status")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  aadhaarNumber      String?            @unique @map("aadhaar_number")
+  isAdmin            Boolean            @default(false) @map("is_admin")
+  rejectionReason    String?            @map("rejection_reason")
+
+  vehicles           Vehicle[]
+  drivenTrips        Trip[]             @relation("DriverTrips")
+  bookings           Booking[]          @relation("PassengerBookings")
+  ratingsGiven       Rating[]           @relation("RatingsGiven")
+  ratingsReceived    Rating[]           @relation("RatingsReceived")
+  parcels            Parcel[]           @relation("SenderParcels")
+  documents          DriverDocument[]   @relation("DriverDocuments")
+
+  @@map("users")
+}
+
+model OtpChallenge {
+  id         String    @id @default(uuid())
+  phone      String
+  codeHash   String    @map("code_hash")
+  expiresAt  DateTime  @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([phone, createdAt])
+  @@map("otp_challenges")
+}
+
+model Vehicle {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  type         String
+  model        String
+  numberPlate  String   @unique @map("number_plate")
+  seatCapacity Int      @map("seat_capacity")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trips        Trip[]
+
+  @@index([userId])
+  @@map("vehicles")
+}
+
+model Trip {
+  id                String                  @id @default(uuid())
+  driverId          String                  @map("driver_id")
+  vehicleId         String                  @map("vehicle_id")
+  sourceName        String                  @map("source_name")
+  sourceLat         Float                   @map("source_lat")
+  sourceLng         Float                   @map("source_lng")
+  destinationName   String                  @map("destination_name")
+  destinationLat    Float                   @map("destination_lat")
+  destinationLng    Float                   @map("destination_lng")
+  departureTime     DateTime                @map("departure_time")
+  availableSeats    Int                     @map("available_seats")
+  pricePerSeat      Decimal                 @map("price_per_seat") @db.Decimal(10, 2)
+  status            TripStatus              @default(OPEN)
+  createdAt         DateTime                @default(now()) @map("created_at")
+  updatedAt         DateTime                @updatedAt @map("updated_at")
+
+  driver            User                    @relation("DriverTrips", fields: [driverId], references: [id], onDelete: Cascade)
+  vehicle           Vehicle                 @relation(fields: [vehicleId], references: [id])
+  bookings          Booking[]
+  ratings           Rating[]
+  parcels           Parcel[]
+
+  @@index([driverId])
+  @@index([vehicleId])
+  @@index([status, departureTime])
+  @@map("trips")
+}
+
+model Booking {
+  id            String        @id @default(uuid())
+  tripId        String        @map("trip_id")
+  passengerId   String        @map("passenger_id")
+  seatsBooked   Int           @map("seats_booked")
+  totalAmount   Decimal       @map("total_amount") @db.Decimal(10, 2)
+  paymentStatus PaymentStatus @default(PENDING) @map("payment_status")
+  bookingStatus BookingStatus @default(PENDING) @map("booking_status")
+  boardingOtp   String?       @map("boarding_otp")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  trip          Trip          @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  passenger     User          @relation("PassengerBookings", fields: [passengerId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
+  @@index([passengerId])
+  @@map("bookings")
+}
+
+model Rating {
+  id         String   @id @default(uuid())
+  fromUserId String   @map("from_user")
+  toUserId   String   @map("to_user")
+  tripId     String   @map("trip_id")
+  rating     Int
+  review     String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  fromUser   User     @relation("RatingsGiven", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser     User     @relation("RatingsReceived", fields: [toUserId], references: [id], onDelete: Cascade)
+  trip       Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@unique([fromUserId, toUserId, tripId])
+  @@index([toUserId])
+  @@map("ratings")
+}
+
+model Parcel {
+  id             String         @id @default(uuid())
+  senderId       String         @map("sender_id")
+  tripId         String         @map("trip_id")
+  pickupLocation String         @map("pickup_location")
+  dropLocation   String         @map("drop_location")
+  weight         Decimal        @db.Decimal(8, 2)
+  parcelType     String         @map("parcel_type")
+  deliveryStatus DeliveryStatus @default(PENDING) @map("delivery_status")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  sender         User           @relation("SenderParcels", fields: [senderId], references: [id], onDelete: Cascade)
+  trip           Trip           @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([senderId])
+  @@index([tripId])
+  @@map("parcels")
+}
+
+model DriverDocument {
+  id        String         @id @default(uuid())
+  userId    String         @map("user_id")
+  type      DocumentType
+  fileUrl   String         @map("file_url")
+  status    DocumentStatus @default(PENDING)
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
+
+  user      User           @relation("DriverDocuments", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("driver_documents")
+}

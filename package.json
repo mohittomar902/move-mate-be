@@ -1,0 +1,21 @@
+{
+  "name": "movemate",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:backend": "npm run start:dev -w apps/backend",
+    "start:backend": "npm run start:prod -w apps/backend",
+    "build:backend": "npm run build -w apps/backend",
+    "lint": "npm run lint -w apps/backend",
+    "prisma:generate": "npm run prisma:generate -w apps/backend",
+    "prisma:migrate": "npm run prisma:migrate -w apps/backend",
+    "prisma:deploy": "npm run prisma:deploy -w apps/backend"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
