@@ -12,7 +12,9 @@ export class DriverVerificationService {
   constructor(private readonly prisma: PrismaService) {}
 
   async saveDocument(userId: string, type: DocumentType, fileUrl: string) {
-    await this.prisma.driverDocument.deleteMany({ where: { userId, type } });
+    if (type !== DocumentType.CAR_PHOTO) {
+      await this.prisma.driverDocument.deleteMany({ where: { userId, type } });
+    }
     return this.prisma.driverDocument.create({
       data: { userId, type, fileUrl },
     });
@@ -57,8 +59,8 @@ export class DriverVerificationService {
     }
 
     const carPhotos = docs.filter((d) => d.type === DocumentType.CAR_PHOTO);
-    if (carPhotos.length < 2) {
-      throw new BadRequestException('Please upload at least 2 car photos');
+    if (carPhotos.length < 1) {
+      throw new BadRequestException('Please upload at least 1 car photo');
     }
 
     // Aadhaar is stored as a text field, not a document file
