@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
@@ -56,6 +56,10 @@ export class AuthService {
       create: { phone: dto.phone },
     });
 
+    if (user.isBanned) {
+      throw new ForbiddenException('Account suspended');
+    }
+
     await this.prisma.otpChallenge.update({
       where: { id: challenge.id },
       data: { consumedAt: new Date() },
@@ -73,8 +77,20 @@ export class AuthService {
         },
       );
 
+      const user = await this.prisma.user.findUnique({
+        where: { id: payload.sub },
+        select: { isBanned: true },
+      });
+
+      if (user?.isBanned) {
+        throw new ForbiddenException('Account suspended');
+      }
+
       return this.issueTokens(payload.sub, payload.phone);
-    } catch {
+    } catch (error) {
+      if (error instanceof ForbiddenException) {
+        throw error;
+      }
       throw new UnauthorizedException('Invalid refresh token');
     }
   }

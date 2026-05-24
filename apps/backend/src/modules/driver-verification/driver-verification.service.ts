@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { DocumentType, VerificationStatus } from '@prisma/client';
+import { AdminAction, DocumentType, VerificationStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
@@ -131,31 +131,89 @@ export class DriverVerificationService {
     await this.assertAdmin(adminId);
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
-    return this.prisma.user.update({
-      where: { id: userId },
-      data: { verificationStatus: VerificationStatus.VERIFIED, rejectionReason: null },
-      select: { id: true, verificationStatus: true },
-    });
+    const [updated] = await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { verificationStatus: VerificationStatus.VERIFIED, rejectionReason: null },
+        select: { id: true, verificationStatus: true },
+      }),
+      this.prisma.adminLog.create({
+        data: {
+          adminId,
+          action: AdminAction.APPROVE_DRIVER,
+          targetId: userId,
+          targetType: 'user',
+        },
+      }),
+    ]);
+    return updated;
+  }
+
+  async revokeAdmin(adminId: string, userId: string) {
+    await this.assertAdmin(adminId);
+    const [updated] = await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { isAdmin: false },
+        select: { id: true, isAdmin: true },
+      }),
+      this.prisma.adminLog.create({
+        data: {
+          adminId,
+          action: AdminAction.REVOKE_ADMIN,
+          targetId: userId,
+          targetType: 'user',
+        },
+      }),
+    ]);
+    return updated;
   }
 
   async adminReject(adminId: string, userId: string, reason: string) {
     await this.assertAdmin(adminId);
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
-    return this.prisma.user.update({
-      where: { id: userId },
-      data: { verificationStatus: VerificationStatus.REJECTED, rejectionReason: reason },
-      select: { id: true, verificationStatus: true, rejectionReason: true },
-    });
+    const [updated] = await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { verificationStatus: VerificationStatus.REJECTED, rejectionReason: reason },
+        select: { id: true, verificationStatus: true, rejectionReason: true },
+      }),
+      this.prisma.adminLog.create({
+        data: {
+          adminId,
+          action: AdminAction.REJECT_DRIVER,
+          targetId: userId,
+          targetType: 'user',
+          note: reason,
+        },
+      }),
+    ]);
+    return updated;
   }
 
   // Dev-only: make a user admin by userId (no auth check)
-  async makeAdmin(userId: string) {
-    return this.prisma.user.update({
-      where: { id: userId },
-      data: { isAdmin: true },
-      select: { id: true, isAdmin: true },
-    });
+  async makeAdmin(userId: string, adminId?: string) {
+    const [updated] = await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { isAdmin: true },
+        select: { id: true, isAdmin: true },
+      }),
+      ...(adminId
+        ? [
+            this.prisma.adminLog.create({
+              data: {
+                adminId,
+                action: AdminAction.MAKE_ADMIN,
+                targetId: userId,
+                targetType: 'user',
+              },
+            }),
+          ]
+        : []),
+    ]);
+    return updated;
   }
 
   async assertVerified(userId: string) {

@@ -56,6 +56,17 @@ enum DocumentStatus {
   REJECTED
 }
 
+enum AdminAction {
+  APPROVE_DRIVER
+  REJECT_DRIVER
+  BAN_USER
+  UNBAN_USER
+  CANCEL_TRIP
+  FORCE_COMPLETE_TRIP
+  MAKE_ADMIN
+  REVOKE_ADMIN
+}
+
 model User {
   id                 String             @id @default(uuid())
   fullName           String?            @map("full_name")
@@ -69,6 +80,9 @@ model User {
 
   aadhaarNumber      String?            @unique @map("aadhaar_number")
   isAdmin            Boolean            @default(false) @map("is_admin")
+  isBanned           Boolean            @default(false) @map("is_banned")
+  bannedAt           DateTime?          @map("banned_at")
+  banReason          String?            @map("ban_reason")
   rejectionReason    String?            @map("rejection_reason")
 
   vehicles           Vehicle[]
@@ -78,6 +92,7 @@ model User {
   ratingsReceived    Rating[]           @relation("RatingsReceived")
   parcels            Parcel[]           @relation("SenderParcels")
   documents          DriverDocument[]   @relation("DriverDocuments")
+  adminLogs          AdminLog[]         @relation("AdminLogs")
 
   @@map("users")
 }
@@ -211,4 +226,21 @@ model DriverDocument {
 
   @@index([userId])
   @@map("driver_documents")
+}
+
+model AdminLog {
+  id         String      @id @default(cuid())
+  adminId    String      @map("admin_id")
+  action     AdminAction
+  targetId   String      @map("target_id")
+  targetType String      @map("target_type")
+  note       String?
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  admin      User        @relation("AdminLogs", fields: [adminId], references: [id])
+
+  @@index([adminId])
+  @@index([targetId, targetType])
+  @@index([createdAt])
+  @@map("admin_logs")
 }
